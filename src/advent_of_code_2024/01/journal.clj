@@ -1,6 +1,6 @@
 ;; Design journal for Advent of Code 2024, Day 1
 ;; https://adventofcode.com/2024/day/1
-(ns advent-of-code-2024.01
+(ns advent-of-code-2024.01.journal
   (:require [clojure.string :as str]))
 
 ;; test to make sure the repl is working!
@@ -165,7 +165,8 @@
 (defn puzzle-01 [input]
   (->> input
        (map sort)
-       (apply map (fn [a b] (abs (- a b))))
+       ;;(apply map (fn [a b] (abs (- a b))))
+       (apply map #(abs (- %1 %2)))
        (reduce +)))
 (puzzle-01 test-data)
 ;; => 11
@@ -173,3 +174,51 @@
 (def puzzle-01-soln (puzzle-01 puzzle-input))
 ;; => 2756096
 ;; GOTTEM. One puzzle down.
+
+;; part 2 uses the same data as part 1
+;;
+;; This time, you'll need to figure out exactly how often each number from the left list appears in the right list. Calculate a total similarity score by adding up each number in the left list after multiplying it by the number of times that number appears in the right list.
+;;
+;; Here are the same example lists again:
+;;
+;; 3   4
+;; 4   3
+;; 2   5
+;; 1   3
+;; 3   9
+;; 3   3
+;;
+;; For these example lists, here is the process of finding the similarity score:
+;;
+;;     The first number in the left list is 3. It appears in the right list three times, so the similarity score increases by 3 * 3 = 9.
+;;     The second number in the left list is 4. It appears in the right list once, so the similarity score increases by 4 * 1 = 4.
+;;     The third number in the left list is 2. It does not appear in the right list, so the similarity score does not increase (2 * 0 = 0).
+;;     The fourth number, 1, also does not appear in the right list.
+;;     The fifth number, 3, appears in the right list three times; the similarity score increases by 9.
+;;     The last number, 3, appears in the right list three times; the similarity score again increases by 9.
+;;
+;; So, for these example lists, the similarity score at the end of this process is 31 (9 + 4 + 0 + 0 + 9 + 9).
+
+;; so basically we create a frequency table out of the right-hand list and then map-reduce the left-hand
+;; list to compute the similarity score
+
+;; how do i create a freq table out of a list in clojure?
+;; i guess i reduce the list. each elem is a key, default value of each key is zero, and each time i
+;; reference a key, i increment the corresponding value by one.
+
+;; LMFAO clojure has a function for exactly this: https://clojuredocs.org/clojure.core/frequencies
+(def freq-table (frequencies (second test-data)))
+(get freq-table 3)
+
+(defn puzzle-01-2 [input]
+  (let [left-list (first input)
+        freq-table (frequencies (second input))]
+    (->> left-list
+         (map #(* % (get freq-table % 0)))
+         (reduce +))))
+
+(puzzle-01-2 test-data)
+;; => 31
+;; checks out!
+(def puzzle-01-2-soln (puzzle-01-2 puzzle-input))
+;; => 23117829
