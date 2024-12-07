@@ -309,6 +309,100 @@
 
 #_{:clj-kondo/ignore [:redefined-var]}
 (comment
-  ;; so i guess what we do here is compute the deltas, map the predicates over each one,
-  ;; and the final condition is whether there is one or fewer false values in the result
+  ;; so the obvious solution is to brute-force this:
+  ;; 1. For each report, generate all variant reports; i.e. versions of the report with one level
+  ;; removed. The size of the full set of variant reports will equal the length of the original
+  ;; report. E.g. [1 2 3] will generate the set of variant reports [[1 2], [1 3], [2 3]].
+  ;; 2. Analyze each variant report for safety. If any of the variant reports are safe, mark the
+  ;; original report as safe.
+  ;; 3. Count the number of safe reports the same as before.
+  ;; As an obvious optimization, only analyze the set of variant reports if the original report comes
+  ;; back as unsafe. Given that we know from pt. 1 that 37% of the reports are safe, this optimization
+  ;; will be significant.
+  ;;
+  ;; looking at the input file, this seems like it will probably still be reasonably fast (under one
+  ;; minute execution time).
+  ;; But the question is: Is there a way of analyzing the reports such that their safety can be
+  ;; determined without having to brute force?
+  ;; An optional problem for later, I guess!
+
+  ;; ok so to start, here's our soln function from pt. 1:
+  (defn solve-pt1 [input]
+    (->> input
+         (map
+          (fn [report]
+            (and (or (apply > report) (apply < report))
+                 (->> report
+                      (partition 2 1)
+                      (map #(abs (reduce - %)))
+                      (map #(and (>= % 1) (<= % 3)))
+                      (reduce #(and %1 %2))))))
+         (filter true?)
+         count))
+  (solve-pt1 test-input) ;; => 2
+
+  ;; we want to modify this so that if a report comes back as unsafe, we analyze the variant reports.
+  ;; let me write a function that analyzes the variant reports for a given input report.
+  ;; i'll start by defining a test report from one of the examples that's safe by dampening:
+  (def test-report (nth test-input 3))
+  ;; => (1 3 2 4 5)
+
+  ;; now lemme generate all the variant reports for this report.
+  ;; based on research it seems like keep-indexed will be reasonably concise:
+  (map-indexed
+   (fn [idx val]
+     (keep #(when)))
+   test-report)
+  ;; i mean that seems like it will work, but it's kind of gross
+  ;; split-at also seems promising:
+  (split-at 2 test-report)
+  (split-at 0 test-report)
+  (let [[a b] (split-at 0 test-report)]
+    (concat a (rest b))) ;; => (3 2 4 5)
+  (map
+   (fn [i]
+     (let [[a b] (split-at i test-report)]
+       (concat a (rest b))))
+   (range (count test-report)))
+  ;; => ((3 2 4 5) (1 2 4 5) (1 3 4 5) (1 3 2 5) (1 3 2 4))
+  ;; so this works. it's a little weird that we're mapping over (range (count test-report)) instead
+  ;; of the test report itself (the map is a closure over the test-report), but it's pretty elegant, i think.
+  ;; let's wrap this in a function:
+  (defn generate-variants [report]
+    (map
+     (fn [i]
+       (let [[a b] (split-at i report)]
+         (concat a (rest b))))
+     (range (count report))))
+
+  ;; ok so now we want to analyze the original report, and if false, analyze the variant reports
+  ;; let's take the solution from pt 1 for analyzing a single report and put that in its own function:
+  (defn report-safe? [report]
+    (and (or (apply > report) (apply < report))
+         (->> report
+              (partition 2 1)
+              (map #(abs (reduce - %)))
+              (map #(and (>= % 1) (<= % 3)))
+              (reduce #(and %1 %2)))))
+  ;; and then we can try to wire it all together:
+  (defn solve-pt2 [input]
+    (->> input
+         (map
+          (fn [report]
+            (or (report-safe? report)
+                (some report-safe? (generate-variants report)))))
+         (filter true?)
+         count))
+  ;; i just want to verify that (or nil) is false:
+  (or false false) ;; => false
+  (or nil nil) ;; => nil
+  (or nil false) ;; => false
+  ;; ok so that will be ok bc the first predicate is guaranteed to return a boolean
+  ;; so let's test our solution:
+  (solve-pt2 test-input)
+  ;; => 4
+  ;; ok that checks! lemme try to submit:
+  (solve-pt2 input)
+  ;; => 439
+  ;; accepted!
   ())
