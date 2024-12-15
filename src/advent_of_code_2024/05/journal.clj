@@ -1,6 +1,10 @@
 (ns advent-of-code-2024.05.journal
   (:require [clojure.string :as str]))
 
+;; NOTE: The formatter that automatically runs on save is breaking my code for pt 2. I have
+;; manually fixed it in the solution file, but many of the forms in part 2 of this file have been
+;; autoformatted such that they're different from how I wrote them and do not work.
+
 ;; PART ONE
 ;;
 ;; The North Pole printing department is busier than ever this close to Christmas, and while The Historians continue their search of this historically significant facility, an Elf operating a very familiar printer beckons you over.
@@ -422,7 +426,8 @@
   ;; huh so i got *every* middle digit, which means the filter still isn't working
 
   ;; I actually really don't like my solution so I am going to go back to the drawing board
-  ;; and think about this more carefully.
+  ;; and think about this more carefully. I am thinking I can use the `for` expr (list
+  ;; (comprehension) that i learned about last night after i wrote the initial soln above.
   ;; here are my notes:
   ;;
   ;; for each i in the update
@@ -675,7 +680,7 @@
    :updates
    (map #(str/split % #",") (rest updates-raw))})
 
-(def test-input (create-input-map (parse-input test-input)))
+(def test-input (create-input-map (parse-input test-input-raw)))
 
 (def input
   (-> "src/advent_of_code_2024/05/input.txt"
@@ -709,12 +714,301 @@
               (every?
                (fn [[i j]]
                  (not (contains?
-                       (get-in input [:rules (nth update i)])
+                       (get-in test-input [:rules (nth update i)])
                        (nth update j))))
                (for [i (range len)
                      j (range len)
                      :when (< i j)]
                  [i j])))))))
   (solve-pt2 test-input) ;; => ()
-  ;; TODO: returns () right now, but should return 3 lists (the ones that are invalid)
+  ;; this returns () when it should return 3 lists (the ones that are invalid)
+  (def test-update (first (:updates test-input)))
+  (let [len (count test-update)]
+    (every?
+     (fn [[ni nj]]
+       (not (contains?
+             (get-in test-input [:rules ni])
+             nj)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; => true (which is correct)
+  (def test-update (nth (:updates test-input) 3))
+  (let [len (count test-update)]
+    (every?
+     (fn [[ni nj]]
+       (not (contains?
+             (get-in test-input [:rules ni])
+             nj)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; true (which is incorrect)
+  (let [len (count test-update)]
+    (map
+     (fn [[ni nj]]
+       (not (contains?
+             (get-in test-input [:rules ni])
+             nj)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; => (true true true true true true true true true true)
+  (let [len (count test-update)]
+    (map
+     (fn [[ni nj]]
+       (get-in test-input [:rules ni]))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; this output is long but it doesn't look right
+  (:rules test-input)
+  ;; this looks right
+  ;; but there's no entry for 97 bc it doesn't appear second in any rules
+  ;; i forgot to test that case:
+  (contains? nil 7) ;; => false
+  ;; ok it still works
+  ;; so the confusing thing is just the rules being printed don't match what i would expect
+  ;; i'm going to need more detail:
+  (def test-update (nth (:updates test-input) 3))
+  (let [len (count test-update)]
+    (map
+     (fn [[ni nj]]
+       (let [rules (get-in test-input [:rules ni])
+             result (not (contains? rules nj))]
+         (str "[" ni "," nj "] rules for " ni ": " rules ", result: " result)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  (let [len (count test-update)]
+    (every?
+     (fn [[ni nj]]
+       (not (contains?
+             (get-in test-input [:rules ni])
+             nj)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; huh i think i was just using the wrong value of test-update the whole time?
+  (defn solve-pt2 [input]
+    (->> input
+        ;; this part is the same as pt1, except we change `filter` to `remove`
+         (remove
+          (fn [update]
+            (let [len (count update)]
+              (every?
+               (fn [[i j]]
+                 (not (contains?
+                       (get-in test-input [:rules (nth update i)])
+                       (nth update j))))
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [i j])))))))
+  (solve-pt2 test-input)
+  ;; but this still returns empty list...
+  (def test-update (nth (:updates test-input) 4))
+  (def test-update (nth (:updates test-input) 5))
+  (let [len (count test-update)]
+    (every?
+     (fn [[ni nj]]
+       (not (contains?
+             (get-in test-input [:rules ni])
+             nj)))
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [(nth test-update i) (nth test-update j)])))
+  ;; but i'm getting the right values here...
+  ;; maybe i just misunderstood how (remove) works?
+  (remove odd? (range 10))
+  (->> test-input
+      ;; this part is the same as pt1, except we change `filter` to `remove`
+       (map
+        (fn [update]
+          (let [len (count update)]
+            (every?
+             (fn [[i j]]
+               (not (contains?
+                     (get-in test-input [:rules (nth update i)])
+                     (nth update j))))
+             (for [i (range len)
+                   j (range len)
+                   :when (< i j)]
+               [i j]))))))
+  ;; BRO i was literally mapping over `input` instead of `(:updates input)`.......
+  (defn solve-pt2 [input]
+    (->> (:updates input)
+        ;; this part is the same as pt1, except we change `filter` to `remove`
+         (remove
+          (fn [update]
+            (let [len (count update)]
+              (every?
+               (fn [[ni nj]]
+                 (not (contains?
+                       (get-in test-input [:rules ni])
+                       nj)))
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [(nth update i) (nth update j)])))))))
+  (solve-pt2 test-input)
+  ;; great now it works
+  ;; so now i have to implement the meat of this part of the puzzle: if an index pair (i,j)
+  ;; is found to be invalid, i have to swap the values at those indexes to make it valid
+  ;; technically this could need to be done multiple time, but i'm going to try it w/o
+  ;; rescans for now and see if i still get the right answer.
+
+  ;; let's just do it with a single test update for now.
+  ;; the key op is i think you can assoc into a vector to replace a value at an index:
+  (assoc [1 2 3 4] 2 9) ;; => [1 2 9 4]
+  ;; so we use this to perform our update:
+  (let [len (count test-update)]
+    (reduce
+     (fn [v [i j]]
+       (let [ni (nth test-update i)
+             nj (nth test-update j)]
+         (if
+          (contains?
+           (get-in test-input [:rules ni])
+           nj
+           (-> v
+               (assoc i nj)
+               (assoc j ni)
+               v)))))
+     test-update
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [i j])))
+  ;; test update before: ["97" "13" "75" "29" "47"]
+  ;; test update after:  ["97" "47" "13" "47" "29"]
+  ;; expected result:    [ 97,  75,  47,  29,  13 ]
+
+  ;; hm so this one actually does require multiple swaps:
+  ;; [ 97,  13,  75,  29,  47 ]
+  ;; 75|13 => [ 97,  75,  13,  29,  47 ]
+  ;; 29|13 => [ 97,  75,  29,  13,  47 ]
+  ;; 47|29 => [ 97,  75,  47,  13,  29 ]
+  ;; 29|13 => [ 97,  75,  47,  29,  13 ]
+  ;; so the algorithm will actually yield the right result for this particular input
+  ;; without modification.
+  (let [len (count test-update)]
+    (reduce
+     (fn [v [i j]]
+       (let [ni (nth (:r v) i)
+             nj (nth (:r v) j)]
+         (if
+          (contains?
+           (get-in test-input [:rules ni])
+           nj
+           (let [v' (-> (:r v)
+                        (assoc i nj)
+                        (assoc j ni))
+                 log (str (format "[%d %d] => [%s %s]: Rule found, update vector is now "
+                                  i j ni nj) v')]
+             (-> v
+                 (assoc :r v')
+                 (update :logs #(conj % log))))
+           v))))
+     {:r test-update :logs []}
+     (for [i (range len)
+           j (range len)
+           :when (< i j)]
+       [i j])))
+  ;; okay so it does work after all, i just forgot to update some of the vars at the top
+  (defn solve-pt2 [input]
+    (->> (:updates input)
+        ;; this part is the same as pt1, except we change `filter` to `remove`
+         (remove
+          (fn [update]
+            (let [len (count update)]
+              (every?
+               (fn [[ni nj]]
+                 (not (contains?
+                       (get-in input [:rules ni])
+                       nj)))
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [(nth update i) (nth update j)])))))
+         (map
+          (fn [update]
+            (let [len (count update)]
+              (reduce
+               (fn [v [i j]]
+                 (let [ni (nth v i)
+                       nj (nth v j)]
+                   (if
+                    (contains?
+                     (get-in input [:rules ni])
+                     nj
+                     (-> v
+                         (assoc i nj)
+                         (assoc j ni))
+                     v))))
+               update
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [i j])))))))
+  (solve-pt2 test-input)
+  ;; => (["97" "75" "47" "61" "53"] ["61" "29" "13"] ["97" "75" "47" "29" "13"])
+  ;; that's correct!
+  ;; this code is heavily duplicated but that's alright for now. A good optional improvement
+  ;; for later :)
+  (defn solve-pt2 [input]
+    (->> (:updates input)
+        ;; this part is the same as pt1, except we change `filter` to `remove`
+         (remove
+          (fn [update]
+            (let [len (count update)]
+              (every?
+               (fn [[ni nj]]
+                 (not (contains?
+                       (get-in input [:rules ni])
+                       nj)))
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [(nth update i) (nth update j)])))))
+         (map
+          (fn [update]
+            (let [len (count update)]
+              (reduce
+               (fn [v [i j]]
+                 (let [ni (nth v i)
+                       nj (nth v j)]
+                   (if
+                    (contains?
+                     (get-in input [:rules ni])
+                     nj
+                     (-> v
+                         (assoc i nj)
+                         (assoc j ni))
+                     v))))
+               update
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [i j])))))
+         (map
+          (fn [update]
+            (let [middle-idx (quot (count update) 2)]
+              (->> middle-idx
+                   (nth update)
+                   Integer/parseInt))))
+         (reduce +)))
+  (solve-pt2 test-input)
+  ;; => 123
+  ;; okay, let's try it on the real input:
+  (solve-pt2 input)
+  ;; => 4971
+  ;; accepted! i'm surprised, honestly, but i'll take it
   ())
