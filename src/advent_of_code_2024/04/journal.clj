@@ -1,5 +1,7 @@
 (ns advent-of-code-2024.04.journal
   (:require [clojure.string :as str]
+            [clojure.math :as math]
+            [clojure.set :as set]
             [clojure.core.matrix :as matrix]))
 
 ;; PART ONE
@@ -235,4 +237,290 @@ MXMXAXMASX
   ;; that one was actually super fun. very elegant solution in clojure.
   ;; it's sick that they can just bolt on array manipulation as a library and have it feel
   ;; like a natural extension of the core language.
+  ())
+
+(def test-input-raw "
+MMMSXXMASM
+MSAMXMSMSA
+AMXSXMAAMM
+MSAMASMSMX
+XMASAMXAMM
+XXAMMXXAMA
+SMSMSASXSS
+SAXAMASAAA
+MAMMMXMMMM
+MXMXAXMASX
+    ")
+
+(defn parse-input [raw-input]
+  (-> raw-input
+      str/trim
+      str/split-lines))
+
+(def test-input (parse-input test-input-raw))
+
+(defn matrix->diagonals [input]
+  (let [size (first (matrix/shape input))]
+    (->> (range (- size) size)
+         (map #(matrix/diagonal input %))
+         (remove empty?))))
+
+(def major-diagonals matrix->diagonals)
+(defn minor-diagonals [input]
+  (let [size (first (matrix/shape input))]
+    (as-> input $
+      (reduce
+       #(apply matrix/swap-rows %1 %2)
+       $
+         ;; this math will work for both even and odd nums as long as it's floor division
+       (map #(vector % (- size % 1)) (range (quot size 2))))
+      (matrix->diagonals $))))
+
+(def stringify-matrix (partial map #(apply str %)))
+
+;; ===============================================================
+;; PART TWO
+;; Looking for the instructions, you flip over the word search to find that this isn't actually an XMAS puzzle; it's an X-MAS puzzle in which you're supposed to find two MAS in the shape of an X. One way to achieve that is like this:
+;;
+;; M.S
+;; .A.
+;; M.S
+;;
+;; Irrelevant characters have again been replaced with . in the above diagram. Within the X, each MAS can be written forwards or backwards.
+;;
+;; Here's the same example from before, but this time all of the X-MASes have been kept instead:
+;;
+;; .M.S......
+;; ..A..MSMS.
+;; .M.S.MAA..
+;; ..A.ASMSM.
+;; .M.S.M....
+;; ..........
+;; S.S.S.S.S.
+;; .A.A.A.A..
+;; M.M.M.M.M.
+;; ..........
+;;
+;; In this example, an X-MAS appears 9 times.
+;;
+;; Flip the word search from the instructions back over to the word search side and try again. How many times does an X-MAS appear?
+
+#_{:clj-kondo/ignore [:redefined-var]}
+(comment
+  ;; okay so the way to solve this i think is to look for "MAS" or "SAM" on the diagonals only,
+  ;; and to note the coords of the central letter (which is always "A"). I'll have a list of
+  ;; coords from the major diagonals, and a list of coords from the minor diagonals. Any time
+  ;; a major coord and a minor coord match, that's a full match.
+  ;;
+  ;; the part i'm not sure about is whether the major and minor coord systems are the same,
+  ;; or if there's some translation that has to be done
+  ;; To test this, i'm going to insert a special character into the test input and see where
+  ;; it appears in each diagonal representation.
+  (def test-input-raw "
+MMM.XXMASM
+M.AMXMSMSA
+AMXSXMAAMM
+MSAMASMS.X
+XM@SAMXAMM
+XXAMMXXAMA
+SMSMSASXSS
+SAXAMASAAA
+MAMMMXMMMM
+MXMXAXMASX
+    ")
+
+  (def test-input (parse-input test-input-raw))
+  (def test-matrix (matrix/array (map vec test-input)))
+  (major-diagonals test-matrix)
+  (minor-diagonals test-matrix)
+  ;; okay it's in completely different places, i think i have to work out the math for this
+  ;;
+  ;; Major Diagonals:
+  ;;   - the offset from the center row (longest row) is equal to the difference between the
+  ;;     x and y coords
+  ;;   - if x-y is negative it's below, positive it's above
+  ;;   - the x and y coords each increment by 1 as you go along each diagonal, so the sum of
+  ;;     x and y increases by 2
+  ;;   - so the column index (index w/in the row) of the val is going to be equal to the y
+  ;;     coord for rows above the center, and the x coord for rows below the center
+  ;;   - and then to get the other coord, you just add the row index (where the center is 0,
+  ;;     rows below center are negative, and rows above center are positive)
+  ;;   - i'm continuing to assume that the crossword is square, so there's going to be
+  ;;     size-1 rows above center, and size-1 rows below center
+  (case (math/signum 0)
+    0.0 "zero"
+    -1.0 "neg"
+    1.0 "pos")
+  (let [r -2 w 6]
+    (let [c1 w c2 (+ w (abs r))]
+      (case (math/signum r)
+        0.0 [c1 c2]
+        -1.0 [c2 c1]
+        1.0 [c1 c2])))
+  ;; [ 0  0] => [0 0]
+  ;; [-3  0] => [3 0]
+  ;; [-5  3] => [8 3]
+  ;; [ 2  2] => [2 4]
+  ;; these are all correct
+  (defn major-diagonal->coords [r w]
+    ;; r is between -(size-1) and size-1 inclusive
+    ;; w is between 0 and size-1 inclusive
+    (let [c1 w c2 (+ w (abs r))]
+      (case (math/signum r)
+        0.0 [c1 c2]
+        -1.0 [c2 c1]
+        1.0 [c1 c2])))
+
+  ;; okay that's the major diagonals taken care of
+  ;; now for the minor diagonals:
+  ;;   - so we do a similar translation, except [0 0] in the diagonal repr is equal to
+  ;;     [0 (size-1)] in the standard repr. So y is now `(- size ColIdx 1)`.
+  ;;   - the property of the main minor diagonal is that the x y coords sum to size-1
+  ;;   - and then as you go out from that, it steps down on either side.
+  ;;     So x+y = size - RowIdx - 1
+  ;; so actually from trial and error, it looks like i don't have to derive a formula
+  ;; from scratch like i did for the major diagonals: in practice, the minor diagonal
+  ;; conversion can just use the major diagonal conversion and then mirror the y coord
+  ;; specifically
+  (defn minor-diagonal->coords [r w size]
+    (let [[x y] (major-diagonal->coords r w)]
+      [x (- size y 1)]))
+  (minor-diagonal->coords 3 2 10)
+  ;; [ 7  1] => [1 1]  correct!
+  ;; [ 6  3] => [3 0]  correct!
+  ;; [-2  6] => [8 3]  correct!
+  ;; [ 3  2] => [2 4]  correct!
+  ;; okay great, that all seems to work
+
+  ;; now i have to restore the test input
+  (def test-input-raw "
+MMMSXXMASM
+MSAMXMSMSA
+AMXSXMAAMM
+MSAMASMSMX
+XMASAMXAMM
+XXAMMXXAMA
+SMSMSASXSS
+SAXAMASAAA
+MAMMMXMMMM
+MXMXAXMASX
+    ")
+  (def test-input (parse-input test-input-raw))
+  (def test-matrix (matrix/array (map vec test-input)))
+  ;; so then for each diagonal we're going to look for "MAS" and "SAM" and note the position
+  ;; of the middle letter
+  (def test-string
+    (-> test-matrix
+        major-diagonals
+        stringify-matrix
+        (nth 9)))
+  ;; => "MSXMAXSAMX"
+  ;; so i have to get the index of each match within this string
+  ;; research seems to indicate that i have to use java interop for this
+  ;; so here is how i'd do one match
+  (let [s test-string]
+    (let [matcher (re-matcher #"SAM" s)]
+      (when (re-find matcher)
+        (. matcher start))))
+  ;; => 6
+  ;; and here's how i'd do all matches:
+  (let [s test-string]
+    (let [matcher (re-matcher #"X" s)]
+      (for [idx (. matcher start)
+            :while (re-find matcher)]
+        idx)))
+  ;; this doesn't work bc you can't call matcher.start() before calling matcher.find()
+  ;; i don't think this was on track to be idiomatic in any case
+  ;; more research indicates that a more elegant/idiomatic solution could be via using
+  ;; `repeatedly`
+  (let [s test-string]
+    (let [matcher (re-matcher #"X" s)]
+      (take-while some?
+                  (repeatedly
+                   #(when (re-find matcher) (. matcher start))))))
+  ;; => (2 5 9)
+  ;; beautiful
+
+  (defn re-indexes [re s]
+    (let [matcher (re-matcher re s)]
+      (take-while some?
+                  (repeatedly
+                   #(when (re-find matcher) (. matcher start))))))
+
+  (let [input test-input]
+    (->> input
+         (map vec)
+         matrix/array
+         major-diagonals
+         stringify-matrix
+         (map #(concat
+                (re-indexes #"MAS" %)
+                (re-indexes #"SAM" %)))))
+  ;; this gives a sparse array with some numbers in it, with the shape matching that
+  ;; of the diagonal repr, which is what i would expect
+
+  (let [str-mtx (stringify-matrix (major-diagonals test-matrix))]
+    ;; continuing to assume the word search is square
+    (let [size (/ (+ (count str-mtx) 1) 2)]
+      (->> str-mtx
+           (map #(concat
+                  (re-indexes #"MAS" %)
+                  (re-indexes #"SAM" %)))
+           (map-indexed
+            (fn [idx data]
+              (let [r (- size idx 1)]
+              ;; add 1 bc we want the index of the 'A', not the beginning of the match
+                (map #(major-diagonal->coords r (+ % 1)) data))))
+        ;; can't use flatten bc we want to keep the inner-most level of nesting
+           (reduce #(concat %1 %2) []))))
+  ;; => ([1 8] [1 7] [3 7] [2 4] [5 7] [2 3] [5 6] [7 7] [2 1] [4 3] [6 2] [7 2])
+  ;; appears to be working great
+  (defn diagonal-matches [str-mtx conversion-fn]
+    ;; continuing to assume the word search is square
+    (let [size (/ (+ (count str-mtx) 1) 2)]
+      (->> str-mtx
+           (map #(concat
+                  (re-indexes #"MAS" %)
+                  (re-indexes #"SAM" %)))
+           (map-indexed
+            (fn [idx data]
+              (let [r (- size idx 1)]
+              ;; add 1 bc we want the index of the 'A', not the beginning of the match
+                (map #(conversion-fn r (+ % 1)) data))))
+        ;; can't use flatten bc we want to keep the inner-most level of nesting
+           (reduce #(concat %1 %2) [])
+           set)))
+  (diagonal-matches (stringify-matrix (major-diagonals test-matrix)) major-diagonal->coords)
+  (let [op *]
+    (op 3 2))
+  (merge #{} #{1 2} #{2 3})
+
+  (let [input test-input
+        input-matrix (matrix/array (map vec input))
+        size (first (matrix/shape input-matrix))
+        pipeline-fn #(-> input-matrix
+                         %1
+                         stringify-matrix
+                         (diagonal-matches %2))]
+    (count
+     (set/intersection
+      (pipeline-fn major-diagonals major-diagonal->coords)
+      (pipeline-fn minor-diagonals #(minor-diagonal->coords %1 %2 size)))))
+  ;; => 9
+  ;; i have officially gotten the correct answer for the test input
+  ;; now I will run on the actual input
+  (defn solve-pt2 [input]
+    (let [input-matrix (matrix/array (map vec input))
+          size (first (matrix/shape input-matrix))
+          pipeline-fn #(-> input-matrix
+                           %1
+                           stringify-matrix
+                           (diagonal-matches %2))]
+      (count
+       (set/intersection
+        (pipeline-fn major-diagonals major-diagonal->coords)
+        (pipeline-fn minor-diagonals #(minor-diagonal->coords %1 %2 size))))))
+  (solve-pt2 input)
+  ;; => 1969
+  ;; accepted (!)
   ())
