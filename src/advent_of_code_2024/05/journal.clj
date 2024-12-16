@@ -1011,4 +1011,74 @@
   (solve-pt2 input)
   ;; => 4971
   ;; accepted! i'm surprised, honestly, but i'll take it
+
+  ;; hello it is day three and i am going to refactor my solution to be less messy
+  ;; i'm going to reduce each update to {:update [...] :corrected? true} and then
+  ;; only keep the ones where :corrected? is true.
+  (let [input test-input]
+    (->> (:updates input)
+         (map
+          (fn [update]
+            (let [len (count update)]
+              (reduce
+               (fn [acc [i j]]
+                 (let [v (:update acc)
+                       ni (nth v i)
+                       nj (nth v j)]
+                   (if
+                    (contains?
+                     (get-in input [:rules ni])
+                     nj
+                     (assoc acc
+                            :corrected? true
+                            :update (assoc v i nj j ni))
+                     acc))))
+               {:update update :corrected? false}
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [i j])))))
+         (filter #(:corrected? %))))
+  ;; ~it works great~
+  ;; note also i've adopted a strategy of wrapping code that i copy out of a function in a
+  ;; `let` so that i don't have to change any of the variable names internally, which
+  ;; prevents all the time i wasted yesterday "debugging" stuff that just came down to
+  ;; forgetting to change the variable names when i copied code from one context to a
+  ;; different context.
+  (defn solve-pt2 [input]
+    (->> (:updates input)
+         (map
+          (fn [update]
+            (let [len (count update)]
+              (reduce
+               (fn [acc [i j]]
+                 (let [v (:update acc)
+                       ni (nth v i)
+                       nj (nth v j)]
+                   (if
+                    (contains?
+                     (get-in input [:rules ni])
+                     nj
+                     (assoc acc
+                            :corrected? true
+                            :update (assoc v i nj j ni))
+                     acc))))
+               {:update update :corrected? false}
+               (for [i (range len)
+                     j (range len)
+                     :when (< i j)]
+                 [i j])))))
+         (filter #(:corrected? %))
+         (map
+          (fn [update-map]
+            (let [update (:update update-map)
+                  middle-idx (quot (count update) 2)]
+              (->> middle-idx
+                   (nth update)
+                   Integer/parseInt))))
+         (reduce +)))
+  (solve-pt2 test-input) ;; => 123
+  (solve-pt2 input) ;; => 4971
+  ;; yay.
+  ;; this reduces the LoC of the solution from 41 to 32
   ())

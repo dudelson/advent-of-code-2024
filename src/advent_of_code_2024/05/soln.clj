@@ -40,42 +40,32 @@
 
 (defn solve-pt2 [input]
   (->> (:updates input)
-      ;; this part is the same as pt1, except we change `filter` to `remove`
-       (remove
-        (fn [update]
-          (let [len (count update)]
-            (every?
-             (fn [[ni nj]]
-               (not (contains?
-                     (get-in input [:rules ni])
-                     nj)))
-             (for [i (range len)
-                   j (range len)
-                   :when (< i j)]
-               [(nth update i) (nth update j)])))))
        (map
         (fn [update]
           (let [len (count update)]
             (reduce
-             (fn [v [i j]]
-               (let [ni (nth v i)
+             (fn [acc [i j]]
+               (let [v (:update acc)
+                     ni (nth v i)
                      nj (nth v j)]
                  (if
                   (contains?
-                    (get-in input [:rules ni])
-                    nj)
-                  (-> v
-                      (assoc i nj)
-                      (assoc j ni))
-                  v)))
-             update
+                   (get-in input [:rules ni])
+                   nj)
+                  (assoc acc
+                         :corrected? true
+                         :update (assoc v i nj j ni))
+                  acc)))
+             {:update update :corrected? false}
              (for [i (range len)
                    j (range len)
                    :when (< i j)]
                [i j])))))
+       (filter #(:corrected? %))
        (map
-        (fn [update]
-          (let [middle-idx (quot (count update) 2)]
+        (fn [update-map]
+          (let [update (:update update-map)
+                middle-idx (quot (count update) 2)]
             (->> middle-idx
                  (nth update)
                  Integer/parseInt))))
